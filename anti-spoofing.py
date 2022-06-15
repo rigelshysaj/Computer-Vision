@@ -9,8 +9,6 @@ from imutils.video import VideoStream
 from datetime import datetime
 import matplotlib.pyplot as plt
 import os
-import sys
-from pathlib import Path
 import face_recognition as fr
 
 

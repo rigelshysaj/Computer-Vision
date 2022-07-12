@@ -141,24 +141,3 @@ def test_accuracy_thresholds(face_recognizer, faces_test, labels_test, directory
     
     plt.plot(false_positive_rates, true_positive_rates)
     plt.show()
-
-
-if __name__ == '__main__':
-    
-    faces_train, labels_train, faces_test, labels_test = prepare_data_for_training_celeb()
-    
-    lbph_face_recognizer = train_models(faces_train, labels_train)
-    
-    image = cv2.imread("/Users/rigelshysaj/progetti/celebrity/Celebrity/test/Obama/iui.jpg")
-    
-    face, rect = detect_face(image)
-    
-    label, confidence = predict(lbph_face_recognizer, face)
-    
-    names = get_names("celeb")
-    
-    print(names)
-    
-    print(names[label-1])
-    
-    

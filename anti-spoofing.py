@@ -12,6 +12,7 @@ import os
 import face_recognition as fr
 
 
+
 ap = argparse.ArgumentParser()
 ap.add_argument("-c", "--confidence", type=float, default=0.5,
                     help="minimum probability to filter weak detections")
@@ -35,7 +36,6 @@ ATTACK = 1
 GENUINE = 0
 thresh = 0.7
 
-print(protoPath)
 
 def detector(img):
     frame = imutils.resize(img, width=600)
@@ -90,119 +90,48 @@ def demo(img):
 
 
 
-
-def faceAndEyeDetection():
-    #Face and eye cascade classifiers from xml files
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml')
-    eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_eye.xml')
-    
-    first_read = True
-    eyeDetection = False
-    blinkDetection = False
-    # Video Capturing by using webcam
-    #cap = cv2.VideoCapture(0)
-    vs = VideoStream(src=0).start()
-    #ret, image = cap.read()
-    inizioTempo = datetime.now()
-    
-    
-    while True:
-        # this will keep the web-cam running and capturing the image for every loop
-        image = vs.read()
-        
-        returnImage = image.copy() 
-        # Convert the rgb image to gray
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Applying bilateral filters to remove impurities
-        gray = cv2.bilateralFilter(gray, 5, 1, 1)
-        # to detect face 
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5, minSize=(200, 200))
-        if len(faces) > 0:
-            for (x, y, w, h) in faces:
-                image = cv2.rectangle(image, (x, y), (x + w, y + h), (1, 190, 200), 2)
-                #face detector
-                roi_face = gray[y:y + h, x:x + w]
-                # image
-                roi_face_clr = image[y:y + h, x:x + w]
-                # to detect eyes
-                eyes = eye_cascade.detectMultiScale(roi_face, 1.3, 5, minSize=(50, 50))
-                for (ex,ey,ew,eh) in eyes:
-                        cv2.rectangle(roi_face_clr,(ex,ey),(ex+ew,ey+eh),(255, 153, 255),2)
-                        if len(eyes) >= 2:
-                            if first_read:
-                                cv2.putText(image, "Eye's detected", (70, 70), cv2.FONT_HERSHEY_TRIPLEX,
-                                    1, (255, 0, 0), 2)
-                                eyeDetection = True
-                                
-                            else:
-                                cv2.putText(image, "Eye's Open", (70, 70), cv2.FONT_HERSHEY_TRIPLEX,
-                                    1, (255, 255, 255), 2)
-                        else:
-                            if first_read:
-                                cv2.putText(image, "No Eye's detected", (70, 70), cv2.FONT_HERSHEY_TRIPLEX,
-                                    1, (255, 0, 255), 2)
-                            else:
-                                cv2.putText(image, "Blink Detected.....!!!!", (70, 70), cv2.FONT_HERSHEY_TRIPLEX,
-                                    1, (0, 0, 0), 2)
-                                print("Blink Detected.....!!!!")
-                                blinkDetection = True
-                                
-        else:
-            cv2.putText(image, "No Face Detected.", (70, 70),cv2.FONT_HERSHEY_TRIPLEX,
-                        1, (0, 255, 255), 2)
-        cv2.imshow('Frame', image)
-        cv2.waitKey(1)
-        
-        fineTempo = datetime.now() - inizioTempo
-        
-        if(fineTempo.seconds > 5 and eyeDetection):
-            first_read = False
-        if(fineTempo.seconds > 9 and blinkDetection and eyeDetection):
-            break
-        
-    
-    if not blinkDetection:
-        return "No face or blink detected"
-    
-    return returnImage, vs
-
-
-
-
 def spoofing_liveness():
     
     faces_train, labels_train, faces_test, labels_test = fr.prepare_data_for_training_celeb()
 
-    lbph_face_recognizer, eigen_face_recognizer, fisher_face_recognizer = fr.train_models(faces_train, labels_train)
+    lbph_face_recognizer = fr.train_models(faces_train, labels_train)
     
-    frame, vs = faceAndEyeDetection()
+    vs = VideoStream(src=0).start()
+    
+    #frame, vs = faceAndEyeDetection()
     
     
-    if(not isinstance(frame, str)):
-        print("[INFO] starting video stream...")
-        time.sleep(2.0)
     
-        while True:
-            frame = vs.read() #the type of the frame is numpy, the shape is (720, 1280, 3)
-            
-            #frame = imutils.resize(frame, width=600) se da errore o non funziona il funzionamento totale allora è da togliere il commento
+    print("[INFO] starting video stream...")
+    time.sleep(2.0)
 
-            celebr = face_rec(frame, lbph_face_recognizer)            
+    while True:
+        frame = vs.read() #the type of the frame is numpy, the shape is (720, 1280, 3)
+        
+        #frame = imutils.resize(frame, width=600) se da errore o non funziona il funzionamento totale allora è da togliere il commento
 
-            spoofing_detection(frame, thresh, celebr)            
+        celebr = face_rec(frame, lbph_face_recognizer)
 
-            cv2.imshow("Frame", frame)
-            cv2.waitKey(1)
-        else:
-            return frame
-    
-        cv2.destroyAllWindows()
-        vs.stop()
+        if(celebr is None):
+            continue
+
+        spoofing_detection(frame, thresh, celebr)            
+
+        cv2.imshow("Frame", frame)
+        cv2.waitKey(1)
+    else:
+        return frame
+
+    cv2.destroyAllWindows()
+    vs.stop()
         
 
 def face_rec(image, lbph_face_recognizer):
 
     face, rect = fr.detect_face(image)
+    
+    if(face is None):
+        return None
 
     label, confidence = fr.predict(lbph_face_recognizer, face)
 
@@ -311,19 +240,14 @@ def spoofing_detection(frame, thresh, celebr = ""):
 
 
 
-def test_accuracy_blink():
+def test_accuracy():
     true_positive_rates = []
     false_positive_rates = []
+    precisions = []
 
-    thresholds = []
-    true_positive_values = []
-    false_negative_values = []
-    true_negative_values = []
-    false_positive_values = []
-    accuracies = []
     
     
-    path = "/Users/rigelshysaj/Downloads/LCC_FASD/LCC_FASD_development/"
+    path = "LCC_FASD/LCC_FASD_development/"
     
     for i in range(1, 11):
         tn = 0
@@ -337,6 +261,8 @@ def test_accuracy_blink():
                 continue
             for filename in os.listdir(path + directory):
                 image = cv2.imread(path + directory + "/" + filename)
+        
+                
                 if image is None:
                     continue
                 
@@ -347,34 +273,39 @@ def test_accuracy_blink():
                 
                 label = spoofing_detection(image, thresh)
                 
+                
                 if label is None:
                     continue
     
+                label = label.strip()
                 if label == 'true':
                     if directory == "real":
-                        tp += 1
-                    else:
-                        fp += 1
-                elif label == 'fake':
-                    if directory == "spoof":
                         tn += 1
                     else:
                         fn += 1
-        print(f"Accuracy at threshold {i / 10}: {(tp + tn) / (tp + tn + fp + fn)}")
+                elif label == 'fake':
+                    if directory == "spoof":
+                        tp += 1
+                    else:
+                        fp += 1
+            
+        
+        precision = tp/(tp + fp)
         tpr = tp/(tp + fn)
         fpr = fp/(fp + tn)
         true_positive_rates += [tpr]
         false_positive_rates += [fpr]
-        thresholds += [i]
-        true_positive_values += [tp]
-        true_negative_values += [tn]
-        false_positive_values += [fp]
-        false_negative_values += [fn]
-        accuracies += [(tp + tn) / (tp + tn + fp + fn)]
+        precisions += [precision]
+        
+        print(f"Accuracy at threshold {i / 10}: {(tp + tn) / (tp + tn + fp + fn)}")
+        print(f"Precision at threshold {i / 10}: {precision}")
+        print(f"Recall at threshold {i / 10}: {tpr}")
+        print(f"F1 at threshold {i / 10}: {(2 * precision * tpr) / (precision + tpr)}")
     
-    print(f"TP {tp}, TN: {tn}, FP {fp}, FN: {fn}")
+    
     plt.plot(false_positive_rates, true_positive_rates)
     plt.show()
+    plt.plot(true_positive_rates, precisions)
+    plt.show()
 
-
-#spoofing_liveness()
+test_accuracy()

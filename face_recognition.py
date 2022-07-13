@@ -5,14 +5,9 @@ import cv2
 import os
 from pathlib import Path
 import numpy as np
-from random import sample
 import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).parent
-Rigels_TEST = "rigels_test.npy"
-Rigels_TRAIN = "rigels_train.npy"
-Label_TEST = "label_test.npy"
-Label_TRAIN = "label_train.npy"
 
 def detect_face(image):
     if(image is None):
@@ -44,7 +39,7 @@ def extract_faces_and_labels(dataset_dir):
             if face is not None:
                 faces += [face]
                 labels += [count]
-                print(f"{count}. Elaborato {image} per celebrity {name}")
+                #print(f"{count}. Elaborato {image} per celebrity {name}")
     return faces, labels
 
 def prepare_data_for_training_celeb():
@@ -56,19 +51,20 @@ def prepare_data_for_training_celeb():
     return faces_train, labels_train, faces_test, labels_test
 
 
-def train_models(faces, labels, force_lbph=True, do_lbph=True):
+def train_models(faces, labels, force_lbph=False):
     labels = np.array(labels)
 
     if "models" not in os.listdir():
         os.mkdir("models")
 
     lbph_face_recognizer = cv2.face.LBPHFaceRecognizer_create(radius=3)
-    if do_lbph:
-        if "LBPH.yml" not in os.listdir("models") or force_lbph:
-            lbph_face_recognizer.train(faces, labels)
-            lbph_face_recognizer.save("models/LBPH.yml")
-        else:
-            lbph_face_recognizer.read("models/LBPH.yml")
+    
+   
+    if "LBPH.yml" not in os.listdir("models") or force_lbph:
+        lbph_face_recognizer.train(faces, labels)
+        lbph_face_recognizer.save("models/LBPH.yml")
+    else:
+        lbph_face_recognizer.read("models/LBPH.yml")
 
 
     return lbph_face_recognizer

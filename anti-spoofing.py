@@ -4,13 +4,11 @@ import cv2
 import argparse
 import numpy as np
 import imutils
-import time
 from imutils.video import VideoStream
-from datetime import datetime
 import matplotlib.pyplot as plt
 import os
 import face_recognition as fr
-
+import time
 
 
 ap = argparse.ArgumentParser()
@@ -36,29 +34,6 @@ ATTACK = 1
 GENUINE = 0
 thresh = 0.7
 
-
-def detector(img):
-    frame = imutils.resize(img, width=600)
-    (h, w) = frame.shape[:2]
-    blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0,(300, 300), (104.0, 177.0, 123.0))
-    net.setInput(blob)
-    detections = net.forward()
-
-    for i in range(0, detections.shape[2]):
-        confidence = detections[0, 0, i, 2]
-
-        if confidence > args["confidence"]:
-            box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
-            (startX, startY, endX, endY) = box.astype("int")
-
-            startX = max(0, startX)
-            startY = max(0, startY)
-            endX = min(w, endX)
-            endY = min(h, endY)
-
-            face = frame[startY:endY, startX:endX]
-            face = cv2.resize(face, (400, 400))
-            return face
 
 def crop_with_ldmk(image, landmark):
     scale = 3.5
@@ -98,18 +73,11 @@ def spoofing_liveness():
     
     vs = VideoStream(src=0).start()
     
-    #frame, vs = faceAndEyeDetection()
-    
-    
-    
-    print("[INFO] starting video stream...")
     time.sleep(2.0)
 
     while True:
-        frame = vs.read() #the type of the frame is numpy, the shape is (720, 1280, 3)
+        frame = vs.read() 
         
-        #frame = imutils.resize(frame, width=600) se da errore o non funziona il funzionamento totale allora è da togliere il commento
-
         celebr = face_rec(frame, lbph_face_recognizer)
 
         if(celebr is None):
@@ -144,23 +112,11 @@ def face_rec(image, lbph_face_recognizer):
 
 def spoofing_detection(frame, thresh, celebr = ""):
     (h, w) = frame.shape[:2]
-    
-    #Example of resize: cv2.resize(img, dim, interpolation = cv2.INTER_AREA)
-    #Example of dnn.blobFromImage: cv2.dnn.blobFromImage(image, scalefactor=1.0, size, mean, swapRB=True)
-    #Since we are declaring size = (300, 300), i think cv2.resize(frame, (300, 300)) is useless, should be only frame
-    #The cv2.dnn.blobFromImage function returns a blob which is our input image after mean subtraction, normalizing, and channel swapping.
+
     blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0,(300, 300), (104.0, 177.0, 123.0))
     
-    # set the input to the pre-trained deep learning network and obtain
-    # the output predicted probabilities for each of the 1,000 ImageNet classes
     net.setInput(blob)
     detections = net.forward()
-    
-    #print(detections.shape) = (1, 1, 200, 7)
-    #npArray = np.array([[[[3,4,5,6,7,8,9], [10,11,12,13,14,15,16], [17,18,19,20,21,22,23], [24,25,26,27,28,29,30]]]]) questa per esempio ha la dimensione = (1, 1, 4, 7)
-    #Per arrivare a 200 basta aggiungere altre 193 liste di questo tipo, per esempio, [float, float, floatt, float, float, float, float] dentro l'ultima dimensione, come ho fatto sopra
-    #print(npArray[0,0,1,2]) stampa 12
-    #The 3rd dimension has our predictions, and each prediction is a list of 7 floating values. At the 1 index we have the class_id, at 2nd index we have the confidence/probability and from 3rd to 6th index we have the coordinates of the object detected.
     
     label = ''
     
@@ -170,56 +126,20 @@ def spoofing_detection(frame, thresh, celebr = ""):
         if confidence > args["confidence"]:
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
             (startX, startY, endX, endY) = box.astype("int")
-            sx = startX
-            sy = startY
-            ex = endX
-            ey = endY
+            
+            startX, startY, endX, endY, sx, sy, ex, ey = normalizing(startX, startY, endX, endY)
+            
+            startX, startY, endX, endY = minMax(startX, startY, endX, endY, w, h)
 
-            ww = (endX - startX) // 10
-            hh = (endY - startY) // 5
-
-            startX = startX - ww
-            startY = startY + hh
-            endX = endX + ww
-            endY = endY + hh
-
-            startX = max(0, startX)
-            startY = max(0, startY)
-            endX = min(w, endX)
-            endY = min(h, endY)
-
-            x1 = int(startX)
-            y1 = int(startY)
-            x2 = int(endX)
-            y2 = int(endY)
+            x1, y1, x2, y2 = toInt(startX, startY, endX, endY)
 
             roi = frame[y1:y2, x1:x2]
             if(roi.size == 0):
                 continue
-            gary_frame = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-            resize_mat = np.float32(gary_frame)
-            m = np.zeros((40, 40))
-            sd = np.zeros((40, 40))
-            mean, std_dev = cv2.meanStdDev(resize_mat, m, sd)
-            new_m = mean[0][0]
-            new_sd = std_dev[0][0]
-            new_frame = (resize_mat - new_m) / (0.000001 + new_sd)
-            blob2 = cv2.dnn.blobFromImage(cv2.resize(new_frame, (40, 40)), 1.0, (40, 40), (0, 0, 0))
-            net2.setInput(blob2)
-            align = net2.forward()
+            
+            align = imageEl(roi)
 
-            aligns = []
-            alignss = []
-            for i in range(0, 68):
-                align1 = []
-                x = align[0][2 * i] * (x2 - x1) + x1
-                y = align[0][2 * i + 1] * (y2 - y1) + y1
-                cv2.circle(frame, (int(x), int(y)), 1, (0, 0, 255), 2)
-                align1.append(int(x))
-                align1.append(int(y))
-                aligns.append(align1)
-            cv2.rectangle(frame, (sx, sy), (ex, ey),(0, 0, 255), 2)
-            alignss.append(aligns)
+            alignss = alignment(align, x2, x1, y2, y1, frame, sx, sy, ex, ey)
 
             ldmk = np.asarray(alignss, dtype=np.float32)
             ldmk = ldmk[np.argsort(np.std(ldmk[:,:,1],axis=1))[-1]]
@@ -240,16 +160,74 @@ def spoofing_detection(frame, thresh, celebr = ""):
 
 
 
+def alignment(align, x2, x1, y2, y1, frame, sx, sy, ex, ey):
+    aligns = []
+    alignss = []
+    for i in range(0, 68):
+        align1 = []
+        x = align[0][2 * i] * (x2 - x1) + x1
+        y = align[0][2 * i + 1] * (y2 - y1) + y1
+        cv2.circle(frame, (int(x), int(y)), 1, (0, 0, 255), 2)
+        align1.append(int(x))
+        align1.append(int(y))
+        aligns.append(align1)
+    cv2.rectangle(frame, (sx, sy), (ex, ey),(0, 0, 255), 2)
+    alignss.append(aligns)
+    
+    return alignss
+
+def toInt(startX, startY, endX, endY):
+    x1 = int(startX)
+    y1 = int(startY)
+    x2 = int(endX)
+    y2 = int(endY)
+    
+    return x1, y1, x2, y2
+
+
+def minMax(startX, startY, endX, endY, w, h):
+    startX = max(0, startX)
+    startY = max(0, startY)
+    endX = min(w, endX)
+    endY = min(h, endY)
+    return startX, startY, endX, endY
+
+
+def normalizing(startX, startY, endX, endY):
+    sx = startX
+    sy = startY
+    ex = endX
+    ey = endY
+    ww = (endX - startX) // 10
+    hh = (endY - startY) // 5
+    startX = startX - ww
+    startY = startY + hh
+    endX = endX + ww
+    endY = endY + hh
+    
+    return startX, startY, endX, endY, sx, sy, ex, ey
+
+def imageEl(roi):
+    gary_frame = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+    resize_mat = np.float32(gary_frame)
+    m = np.zeros((40, 40))
+    sd = np.zeros((40, 40))
+    mean, std_dev = cv2.meanStdDev(resize_mat, m, sd)
+    new_m = mean[0][0]
+    new_sd = std_dev[0][0]
+    new_frame = (resize_mat - new_m) / (0.000001 + new_sd)
+    blob2 = cv2.dnn.blobFromImage(cv2.resize(new_frame, (40, 40)), 1.0, (40, 40), (0, 0, 0))
+    net2.setInput(blob2)
+    return net2.forward()
+
 def test_accuracy():
     true_positive_rates = []
     false_positive_rates = []
     precisions = []
 
-    
-    
     path = "LCC_FASD/LCC_FASD_development/"
     
-    for i in range(1, 11):
+    for i in range(1, 10):
         tn = 0
         tp = 0
         fp = 0
@@ -308,4 +286,5 @@ def test_accuracy():
     plt.plot(true_positive_rates, precisions)
     plt.show()
 
-test_accuracy()
+#test_accuracy()
+spoofing_liveness()
